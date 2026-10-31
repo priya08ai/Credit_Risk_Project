@@ -491,3 +491,110 @@ with st.expander("View Filtered Customer Records"):
     )
 
 st.success("Credit Risk Dashboard Loaded Successfully!")
+import joblib
+import os
+# Load Random Forest Model
+MODEL_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "random_forest_model.pkl"
+)
+
+@st.cache_resource
+def load_model():
+    return joblib.load(MODEL_PATH)
+
+rf_model = load_model()
+st.success("Credit Risk Dashboard Loaded Successfully!")
+st.divider()
+st.title("Loan Default Prediction")
+st.subheader("Predict Whether a Customer May Default")
+
+st.write("Enter customer details below to check the loan default risk.")
+
+st.success("Prediction Section is Visible!")
+import joblib
+import os
+
+st.divider()
+st.title("Loan Default Prediction")
+st.write("Enter customer details to predict loan default risk.")
+
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "random_forest_model.pkl")
+rf_model = joblib.load(MODEL_PATH)
+
+grade_mapping = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4, "F": 5, "G": 6}
+
+with st.form("prediction_form"):
+
+    st.subheader("1. Customer Details")
+
+    age = st.number_input("Age", 18, 100, 30)
+    income = st.number_input("Annual Income", min_value=0, value=50000, step=1000)
+    emp_length = st.number_input("Employment Length (Years)", min_value=0.0, value=5.0)
+
+    credit_history = st.number_input("Credit History Length (Years)", min_value=0, value=5)
+
+    st.subheader("2. Loan Details")
+
+    loan_amount = st.number_input("Loan Amount", min_value=500, value=10000, step=500)
+    interest_rate = st.number_input("Interest Rate (%)", min_value=0.0, max_value=30.0, value=10.0)
+    loan_percent = st.number_input("Loan Percent of Income", min_value=0.0, max_value=1.0, value=0.20)
+
+    loan_grade = st.selectbox("Loan Grade", list(grade_mapping.keys()))
+
+    loan_intent = st.selectbox(
+        "Loan Purpose",
+        ["DEBT CONSOLIDATION", "EDUCATION", "HOME IMPROVEMENT",
+         "MEDICAL", "PERSONAL", "VENTURE"]
+    )
+
+    home = st.selectbox("Home Ownership", ["MORTGAGE", "OTHER", "OWN", "RENT"])
+    default_file = st.selectbox("Previous Default on File", ["N", "Y"])
+
+    submitted = st.form_submit_button("Predict Loan Default Risk")
+
+if submitted:
+
+    input_row = {
+        "person_age": age,
+        "person_income": income,
+        "person_emp_length": emp_length,
+        "loan_amnt": loan_amount,
+        "loan_int_rate": interest_rate,
+        "loan_percent_income": loan_percent,
+        "cb_person_cred_hist_length": credit_history,
+        "loan_grade": grade_mapping[loan_grade],
+
+        "person_home_ownership_OTHER": int(home == "OTHER"),
+        "person_home_ownership_OWN": int(home == "OWN"),
+        "person_home_ownership_RENT": int(home == "RENT"),
+
+        "loan_intent_EDUCATION": int(loan_intent == "EDUCATION"),
+        "loan_intent_HOME IMPROVEMENT": int(loan_intent == "HOME IMPROVEMENT"),
+        "loan_intent_MEDICAL": int(loan_intent == "MEDICAL"),
+        "loan_intent_PERSONAL": int(loan_intent == "PERSONAL"),
+        "loan_intent_VENTURE": int(loan_intent == "VENTURE"),
+
+        "cb_person_default_on_file_Y": int(default_file == "Y")
+    }
+
+    input_df = pd.DataFrame([input_row])
+    input_df = input_df.reindex(columns=rf_model.feature_names_in_, fill_value=0)
+
+    prediction = int(rf_model.predict(input_df)[0])
+    probability = float(rf_model.predict_proba(input_df)[0][1])
+
+    st.subheader("Prediction Result")
+    st.metric("Estimated Default Probability", f"{probability * 100:.2f}%")
+
+    if prediction == 1:
+        st.error("Higher Risk of Loan Default")
+    else:
+        st.success("Lower Risk of Loan Default")
+    st.subheader("Loan Eligibility")
+
+    if probability < 0.50:
+        st.success("Loan Status: Eligible for Consideration")
+    else:
+        st.error("Loan Status: Not Eligible - High Default Risk")
+    st.caption("This is a model estimate, not a guarantee or lending decision.")
